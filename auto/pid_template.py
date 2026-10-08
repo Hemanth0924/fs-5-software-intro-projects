@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def make_car(desired_v:float=20.0, dt:float=0.1) -> dict:
@@ -43,12 +44,35 @@ def update(car: dict, throttle_perc: float, mass: float = 1000, max_throttle_for
 def calculate_desired_acceleration(car: dict, K_P: float, K_I: float = 0.0, K_D: float = 0.0) -> tuple[float, float]:
         #input: car["v"], car["desired_v"] (floats)
         #output: desired acceleration and error tuple(float, float)
-        pass # delete this line and write your PID code here
+       
+        dt = car["dt"]
+        error = car["desired_v"] - car["v"] # error is the target speed minus the current speed
+        p_term = K_P * error # proportional term... K_P * error because bigger error means bigger push 
+        
+        car["net_integral"] += error * dt #sum of all errors * dt to get area under the curve
+        i_term = K_I * car["net_integral"]
 
+        if K_I > 0.0:
+               limit = 5 / K_I # limit the integral term to prevent windup
+               car["net_integral"] = float(np.clip(car["net_integral"], -limit, limit)) # clip the integral term to prevent windup
 
+        if car["error_prev"] is None:
+                d_term = 0.0
+        else:
+                d_term = K_D * (error - car["error_prev"]) / dt # derivative term... K_D * (error - prev_error) / dt because bigger change in error means bigger push
+        car["error_prev"] = error # store the current error  
 
+        acceleration_desired = p_term + i_term + d_term # sum of all terms to get desired acceleration
+        
+        return(acceleration_desired, error)
 
 def acceleration_to_throttle_percentage(acceleration_desired: float, mass: float = 1000, max_throttle_force: float = 5000) -> float:
         #input: desired_acceleration(float)
         #output: throttle percentage (float, -1 to 1)
-        pass # delete this line and write your code to convert desired acceleration to throttle here
+       max_acceleration = max_throttle_force / mass 
+       # the max acceleration is the max force divided by the mass because F = ma, so a = F/m
+       throttle_percentage = acceleration_desired / max_acceleration 
+       # the throttle percentage is the desired acceleration divided by the max acceleration
+       # because if you want to go faster than the max, you need to give more throttle than 100%
+       # which is not possible, so we clip it to 100%
+       return float(np.clip(throttle_percentage, -1.0, 1.0))
